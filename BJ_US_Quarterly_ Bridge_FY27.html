@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJ:US Quarterly Bridge</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: #0d0f0d;
+    color: #e8e6df;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+  .header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #2c2c2a;
+  }
+  .eyebrow { font-size: 10px; letter-spacing: 0.08em; color: #888780; }
+  .title { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .meta { font-size: 10px; color: #888780; margin-top: 8px; line-height: 1.6; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab {
+    flex: 1;
+    font-size: 12px;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid #2c2c2a;
+    border-radius: 8px;
+    color: #e8e6df;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .tab.active { background: #1a1c1a; border-color: #444441; }
+  .legend { display: flex; gap: 14px; margin-bottom: 14px; font-size: 11px; color: #b4b2a9; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+  @media (min-width: 640px) { .grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+  .tile {
+    text-align: left;
+    background: #1a1c1a;
+    border: 1px solid #2c2c2a;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    color: #e8e6df;
+    font-family: inherit;
+  }
+  .tile:hover { border-color: #5f5e5a; }
+  .tile-label { font-size: 10px; color: #b4b2a9; margin-bottom: 6px; line-height: 1.3; }
+  .tile-value { font-size: 19px; font-weight: 600; margin-bottom: 4px; }
+  .tile-delta { font-size: 10px; margin-bottom: 4px; }
+  .tile-sub { font-size: 9px; color: #888780; line-height: 1.3; }
+  .panel { display: none; background: #1a1c1a; border-radius: 10px; padding: 16px; margin-top: 8px; border: 1px solid #2c2c2a; }
+  .panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 8px; }
+  .panel-title { font-size: 15px; font-weight: 600; }
+  .panel-sub { font-size: 11px; color: #b4b2a9; margin-top: 2px; }
+  .close-btn { font-size: 11px; padding: 6px 10px; background: transparent; border: 1px solid #2c2c2a; border-radius: 6px; color: #e8e6df; cursor: pointer; font-family: inherit; }
+  .section-label { font-size: 10px; letter-spacing: 0.06em; color: #888780; margin: 14px 0 6px; }
+  canvas { max-width: 100%; }
+  .note { font-size: 12px; line-height: 1.6; color: #b4b2a9; margin-top: 14px; padding-top: 10px; border-top: 1px solid #2c2c2a; }
+  .source { font-size: 9px; color: #5f5e5a; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: right; padding: 8px 6px; color: #888780; font-weight: 600; border-bottom: 1px solid #2c2c2a; }
+  th:first-child { text-align: left; }
+  td { padding: 7px 6px; text-align: right; border-bottom: 1px solid #2c2c2a; }
+  td:first-child { text-align: left; }
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #2c2c2a; font-size: 9px; color: #5f5e5a; line-height: 1.6; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-scroll table { min-width: 480px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="eyebrow">BJ:US &middot; NYSE &middot; WHOLESALE CLUB SECTOR</div>
+  <div class="title">BJ's Wholesale Club Holdings</div>
+  <div class="meta">
+    Prepared by N. Iyer &middot; &copy; 2026 &middot; not for distribution<br>
+    Data: Q1 FY26 earnings, 10-Q, IR, peer filings
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" id="tab-tiles">KPI tiles</button>
+  <button class="tab" id="tab-table">Peer comp table</button>
+</div>
+
+<div id="view-tiles">
+  <div class="legend">
+    <span><span class="swatch" style="background:#1D9E75;"></span>Tailwind</span>
+    <span><span class="swatch" style="background:#D85A30;"></span>Headwind</span>
+    <span><span class="swatch" style="border:1px dashed #888780;"></span>Estimated, not disclosed</span>
+  </div>
+
+  <div class="grid" id="kpi-grid"></div>
+
+  <div class="panel" id="detail-panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title" id="detail-title"></div>
+        <div class="panel-sub" id="detail-sub"></div>
+      </div>
+      <button class="close-btn" id="close-detail">Close</button>
+    </div>
+
+    <div class="section-label">VARIANCE BRIDGE</div>
+    <div style="position: relative; width: 100%; height: 240px;">
+      <canvas id="waterfall-chart"></canvas>
+    </div>
+
+    <div class="section-label">NORMALIZED BENCHMARK VS PEERS</div>
+    <div style="position: relative; width: 100%; height: 160px;">
+      <canvas id="benchmark-chart"></canvas>
+    </div>
+
+    <div class="note" id="detail-note"></div>
+    <div class="source" id="detail-source"></div>
+  </div>
+</div>
+
+<div id="view-table" style="display:none;">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>BJ's</th><th>Costco</th><th>Sam's</th></tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+  <div class="source" style="margin-top:12px;">Scroll table sideways for full view. Quarters aren't perfectly period-matched across companies (BJ's Q1 FY26 ended May 2, 2026; Costco Q3 FY26 ended May 10, 2026; Sam's Club Q1 FY26 ended ~May 2026) — close enough for directional comparison. Capex intensity = capex guide / most recent annualized revenue. * = Walmart consolidated figure, Sam's Club not broken out separately.</div>
+</div>
+
+<div class="footer">
+  Compiled from public filings and earnings calls. Estimates are directional, not company-disclosed figures.<br>
+  &copy; N. Iyer 2026
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+var KPI_DATA = [
+  {
+    id: "eps", label: "Diluted EPS growth", value: "-2.7%", delta: "YoY, Q1 FY26", tone: "headwind", sub: "FY26 full-yr +9.5%",
+    title: "Diluted EPS bridge", subtitle: "Q1 FY25 $1.13 to Q1 FY26 $1.10",
+    waterfall: [
+      {label:"Q1 FY25 EPS", value:1.13, type:"base"},
+      {label:"Comp growth", value:0.09, type:"up"},
+      {label:"SG&A: club ramp", value:-0.07, type:"down"},
+      {label:"Tariff refund", value:0.02, type:"up"},
+      {label:"Price reinvest", value:-0.05, type:"down"},
+      {label:"Buyback accretion", value:0.03, type:"up"},
+      {label:"Other / tax", value:-0.05, type:"down"},
+      {label:"Q1 FY26 EPS", value:1.10, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Walmart"], benchValues: [-2.7, 15.2, 8.2], benchUnit: "%",
+    benchNote: "Walmart figure is consolidated, Sam's not broken out for EPS. Costco Q3 FY26 had a lighter prior year comp.",
+    note: "Full year FY26 EPS rose 9.5% to $4.38 even as the quarter dipped YoY — new-club investment is depressing near-term per-share earnings while the annual base still grew.",
+    source: "BJ's Q1 FY26 8-K/10-Q; Costco Q3 FY26 call; Walmart Q1 FY26 key metrics."
+  },
+  {
+    id: "capex", label: "Capex intensity", value: "~3.8%", delta: "of FY26 revenue", tone: "neutral", sub: "$800M / ~$21B rev",
+    title: "Capex allocation bridge", subtitle: "Estimated split of $800M FY26 guide",
+    waterfall: [
+      {label:"FY26 capex guide", value:800, type:"base"},
+      {label:"New clubs (est.)", value:-420, type:"down"},
+      {label:"Distribution ctr", value:-220, type:"down"},
+      {label:"Digital / tech", value:-90, type:"down"},
+      {label:"Maintenance", value:-70, type:"down"},
+      {label:"Remaining", value:0, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Walmart"], benchValues: [3.8, 2.4, 3.7], benchUnit: "%",
+    benchNote: "BJ's runs the highest intensity of the three — a smaller base scaling faster proportionally, but more exposed if unit economics disappoint.",
+    note: "Only the $800M FY26 total and $182M Q1 actual are disclosed. The category split is this analyst's estimate — BJ's does not break out capex by category.",
+    source: "BJ's Q1 FY26 release; Costco Q3 FY26 10-Q; Walmart FY26 annual report."
+  },
+  {
+    id: "margin", label: "Merchandise margin", value: "-10 bps", delta: "YoY, Q1 FY26", tone: "headwind", sub: "Refund offset by price cuts",
+    title: "Merchandise margin bridge", subtitle: "YoY bps change, Q1 FY26",
+    waterfall: [
+      {label:"Q1 FY25 margin", value:0, type:"base"},
+      {label:"Tariff refund", value:50, type:"up"},
+      {label:"Price investment", value:-60, type:"down"},
+      {label:"Q1 FY26 margin", value:-10, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Walmart"], benchValues: [-10, -21, 0], benchUnit: "bps",
+    benchNote: "Costco's margin also fell, from its own mix dynamics — a sector-wide discipline signal, not tariff-specific. Sam's-specific margin bps not broken out (shown as 0, not a true zero).",
+    note: "The refund (~$20M, ~50bps) came from a February 2026 Supreme Court/CIT ruling on IEEPA tariffs — one-time, not repeatable. Management reinvested it into pricing rather than margin.",
+    source: "BJ's Q1 FY26 call; Costco Q3 FY26 call."
+  },
+  {
+    id: "comp", label: "Comp sales, ex-fuel", value: "+1.5%", delta: "Merchandise, Q1 FY26", tone: "neutral", sub: "Total incl. gas: +6.3%",
+    title: "Comp sales growth bridge", subtitle: "Total +6.3%, ex-gas +1.5%",
+    waterfall: [
+      {label:"Prior year base", value:0, type:"base"},
+      {label:"Merchandise", value:1.5, type:"up"},
+      {label:"Gasoline", value:4.8, type:"up"},
+      {label:"Total Q1 FY26", value:6.3, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Sam's Club"], benchValues: [1.5, 6.6, 3.9], benchUnit: "%",
+    benchNote: "BJ's trails both peers on ex-fuel comp — the flattering 6.3% headline leans more on gas than the other two.",
+    note: "On the standard ex-fuel analyst cut, BJ's is the laggard of the three this quarter, not the leader — worth flagging directly rather than citing only the flattering traffic stat.",
+    source: "BJ's Q1 FY26 release; Costco Q3 FY26 call; Walmart Q1 FY26 key metrics."
+  },
+  {
+    id: "membership", label: "Membership fee growth", value: "+9.9%", delta: "YoY, Q1 FY26", tone: "tailwind", sub: "90% tenured renewal",
+    title: "Membership income bridge", subtitle: "YoY change, Q1 FY26",
+    waterfall: [
+      {label:"Q1 FY25 fees", value:120.4, type:"base"},
+      {label:"New members", value:6.5, type:"up"},
+      {label:"Higher-tier", value:4.2, type:"up"},
+      {label:"Renewal", value:1.3, type:"up"},
+      {label:"Q1 FY26 fees", value:132.4, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Sam's Club"], benchValues: [9.9, 10.7, 9.6], benchUnit: "%",
+    benchNote: "All three sit in a tight band — fee growth is not a real differentiator between operators right now.",
+    note: "Recurring, high-margin income is a stabilizer, but the growth rate itself roughly matches both peers — differentiation has to come from elsewhere.",
+    source: "BJ's Q1 FY26 release; Costco Q3 FY26 call; Sam's Club Q1 FY26 (Kantar)."
+  },
+  {
+    id: "renewal", label: "Member renewal rate", value: "90%", delta: "4th consecutive year", tone: "tailwind", sub: "Below Costco's level",
+    title: "Renewal rate — level check", subtitle: "Static comparison, not a bridge",
+    waterfall: [
+      {label:"BJ's tenured", value:90, type:"total"},
+      {label:"Costco US/CAN", value:92.2, type:"total"},
+      {label:"Costco worldwide", value:89.7, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco US/CAN","Costco WW"], benchValues: [90, 92.2, 89.7], benchUnit: "%",
+    benchNote: "Sam's Club doesn't disclose a precise renewal % — only qualitative commentary. Flagged as a data gap.",
+    note: "Solid in absolute terms but not category-leading — Costco US/Canada runs ~220bps higher. Frame as solid, not best-in-class.",
+    source: "BJ's FY25 release; Costco Q3 FY26 call."
+  },
+  {
+    id: "units", label: "Store / unit growth", value: "12 openings", delta: "FY26 guide", tone: "tailwind", sub: "Texas is the headline",
+    title: "Unit growth pacing", subtitle: "Openings vs. 2-year target",
+    waterfall: [
+      {label:"FY25 base", value:0, type:"base"},
+      {label:"FY26 planned", value:12, type:"up"},
+      {label:"FY27 implied", value:13, type:"up"},
+      {label:"2-yr target", value:25, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Sam's Club"], benchValues: [0, 0, 0], benchUnit: "#",
+    benchNote: "Fleet sizes differ by orders of magnitude — raw openings/year isn't normalized without dividing by existing base. Values omitted here since a raw count comparison would be misleading.",
+    note: "Texas is the headline new-market bet. Per-club revenue ramp isn't disclosed — BJ's own comp convention excludes clubs open under 13 months, an implicit ramp-period signal.",
+    source: "BJ's Q1 FY26 call; Sam's Club 2025 Investment Community Meeting."
+  },
+  {
+    id: "fcf", label: "Adjusted free cash flow", value: "-$42.0M", delta: "Q1 FY26, turned negative", tone: "headwind", sub: "Capex outrunning cash flow",
+    title: "Free cash flow bridge", subtitle: "Op cash flow less capex, Q1 FY26",
+    waterfall: [
+      {label:"OCF Q1 FY25", value:208.1, type:"base"},
+      {label:"Working capital", value:-68.1, type:"down"},
+      {label:"OCF Q1 FY26", value:140.0, type:"total"},
+      {label:"Less: Q1 capex", value:-182.0, type:"down"},
+      {label:"Adj FCF Q1 FY26", value:-42.0, type:"total"}
+    ],
+    benchLabels: ["BJ's","Costco","Walmart"], benchValues: [0, 0, 0], benchUnit: "$M",
+    benchNote: "Peer FCF not pulled on a comparable basis — both generate multi-billion quarterly operating cash flow, so a raw-dollar comparison isn't informative without normalizing to revenue. Values omitted here.",
+    note: "The sharpest risk flag in the thesis: capex is outrunning operating cash generation. If this persists, it pressures the balance sheet or forces a pullback in buybacks or unit growth.",
+    source: "BJ's Q1 FY26 10-Q; management commentary on working capital."
+  }
+];
+
+var toneColor = { tailwind: "#1D9E75", headwind: "#D85A30", neutral: "#b4b2a9" };
+var grid = document.getElementById("kpi-grid");
+var waterfallChart = null;
+var benchmarkChart = null;
+
+function renderTiles(){
+  for (var i = 0; i < KPI_DATA.length; i++) {
+    var k = KPI_DATA[i];
+    var card = document.createElement("button");
+    card.className = "tile";
+    card.setAttribute("data-idx", i);
+    card.innerHTML =
+      "<div class='tile-label'>" + k.label + "</div>" +
+      "<div class='tile-value'>" + k.value + "</div>" +
+      "<div class='tile-delta' style='color:" + (toneColor[k.tone] || "#b4b2a9") + "'>" + k.delta + "</div>" +
+      "<div class='tile-sub'>" + k.sub + "</div>";
+    card.addEventListener("click", function(){
+      openDetail(KPI_DATA[parseInt(this.getAttribute("data-idx"), 10)]);
+    });
+    grid.appendChild(card);
+  }
+}
+
+function buildWaterfall(steps){
+  var labels = [], floors = [], bars = [], colors = [], running = 0;
+  for (var i = 0; i < steps.length; i++) {
+    var s = steps[i];
+    labels.push(s.label);
+    if (s.type === "base" || s.type === "total") {
+      floors.push(0); bars.push(s.value); colors.push("#888780"); running = s.value;
+    } else {
+      var start = running, end = running + s.value;
+      floors.push(Math.min(start, end)); bars.push(Math.abs(s.value));
+      colors.push(s.value >= 0 ? "#1D9E75" : "#D85A30"); running = end;
+    }
+  }
+  return { labels: labels, floors: floors, bars: bars, colors: colors };
+}
+
+function openDetail(k){
+  document.getElementById("detail-panel").style.display = "block";
+  document.getElementById("detail-title").textContent = k.title;
+  document.getElementById("detail-sub").textContent = k.subtitle;
+  document.getElementById("detail-note").textContent = k.note + "  " + k.benchNote;
+  document.getElementById("detail-source").textContent = "Sources: " + k.source;
+
+  var wf = buildWaterfall(k.waterfall);
+  if (waterfallChart) waterfallChart.destroy();
+  waterfallChart = new Chart(document.getElementById("waterfall-chart"), {
+    type: "bar",
+    data: { labels: wf.labels, datasets: [
+      { label:"floor", data: wf.floors, backgroundColor: "transparent", stack:"s" },
+      { label:"value", data: wf.bars, backgroundColor: wf.colors, stack:"s" }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks: { autoSkip:false, maxRotation:60, minRotation:60, font:{size:10}, color:"#b4b2a9" }, grid: { color: "#2c2c2a" } },
+        y: { ticks: { font:{size:10}, color:"#b4b2a9" }, grid: { color: "#2c2c2a" } }
+      }
+    }
+  });
+
+  if (benchmarkChart) benchmarkChart.destroy();
+  benchmarkChart = new Chart(document.getElementById("benchmark-chart"), {
+    type: "bar",
+    data: { labels: k.benchLabels, datasets: [{ data: k.benchValues, backgroundColor: ["#378ADD","#888780","#888780"] }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks: { font:{size:10}, color:"#b4b2a9", callback: function(v){ return v + (k.benchUnit||""); } }, grid: { color: "#2c2c2a" } },
+        y: { ticks: { font:{size:11}, color:"#b4b2a9" }, grid: { display:false } }
+      }
+    }
+  });
+  document.getElementById("detail-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+renderTiles();
+
+document.getElementById("close-detail").addEventListener("click", function(){
+  document.getElementById("detail-panel").style.display = "none";
+});
+
+var tableRows = [
+  ["Diluted EPS growth, YoY", "-2.7%", "+15.2%", "+8.2%*"],
+  ["Comp sales, ex-fuel", "+1.5%", "+6.6%", "+3.9%"],
+  ["Membership fee growth", "+9.9%", "+10.7%", "+9.6%"],
+  ["Renewal rate", "90%", "92.2%", "n/a"],
+  ["Merchandise margin chg", "-10 bps", "-21 bps", "n/a"],
+  ["Capex intensity (% rev)", "~3.8%", "~2.4%", "~3.7%*"],
+  ["Adjusted free cash flow", "-$42.0M", "n/a", "n/a"]
+];
+var tbody = document.getElementById("table-body");
+for (var r = 0; r < tableRows.length; r++) {
+  var row = tableRows[r];
+  var tr = document.createElement("tr");
+  tr.innerHTML = "<td>" + row[0] + "</td><td>" + row[1] + "</td><td>" + row[2] + "</td><td>" + row[3] + "</td>";
+  tbody.appendChild(tr);
+}
+
+var tabTiles = document.getElementById("tab-tiles");
+var tabTable = document.getElementById("tab-table");
+tabTiles.addEventListener("click", function(){
+  document.getElementById("view-tiles").style.display = "block";
+  document.getElementById("view-table").style.display = "none";
+  tabTiles.className = "tab active";
+  tabTable.className = "tab";
+});
+tabTable.addEventListener("click", function(){
+  document.getElementById("view-tiles").style.display = "none";
+  document.getElementById("view-table").style.display = "block";
+  tabTiles.className = "tab";
+  tabTable.className = "tab active";
+});
+</script>
+</body>
+</html>
